@@ -31,16 +31,31 @@
         background: #66CC00;
       }
       .glass-panel {
-        background: rgba(24, 24, 27, 0.6);
-        backdrop-filter: blur(12px);
-        border: 1px solid #27272a;
+        background: rgba(24, 24, 27, 0.7);
+        backdrop-filter: blur(16px);
+        border: 1px solid rgba(39, 39, 42, 0.8);
+      }
+      .neon-border {
+        box-shadow: 0 0 15px rgba(102, 204, 0, 0.1);
+      }
+      @keyframes scan-line {
+        0% { transform: translateY(-100%); }
+        100% { transform: translateY(100%); }
+      }
+      .scanning-effect::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background: linear-gradient(to bottom, transparent, rgba(102, 204, 0, 0.1), transparent);
+        animation: scan-line 2s linear infinite;
+        pointer-events: none;
       }
       @keyframes fadeIn {
         from { opacity: 0; transform: translateY(10px); }
         to { opacity: 1; transform: translateY(0); }
       }
       .animate-fadeIn {
-        animation: fadeIn 0.4s ease-out forwards;
+        animation: fadeIn 0.4s cubic-bezier(0, 0, 0.2, 1) forwards;
       }
     </style>
   <script type="importmap">

@@ -1,30 +1,22 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 const getAI = () => {
   const apiKey = process.env.API_KEY;
-  if (!apiKey || apiKey.length < 5) {
-    console.error("DIAGNÓSTICO: API_KEY está ausente ou inválida no ambiente process.env.API_KEY");
-  } else {
-    console.log("DIAGNÓSTICO: API_KEY carregada com sucesso (prefixo: " + apiKey.substring(0, 5) + "...)");
+  if (!apiKey) {
+    console.error("ERRO: API_KEY ausente.");
   }
   return new GoogleGenAI({ apiKey: apiKey || "" });
 };
 
 export const geminiService = {
-  async scanLeads(nicho: string, local: string, existingNames: string[] = []) {
-    console.log(`INICIANDO VARREDURA: Nicho=${nicho}, Local=${local}`);
+  async scanLeads(nicho: string, local: string, retries = 0): Promise<any[]> {
     try {
       const ai = getAI();
-      const excludePrompt = existingNames.length > 0 
-        ? `\nIgnore: ${existingNames.join(", ")}.`
-        : "";
-
-      console.log("CHAMANDO API GEMINI...");
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Encontre 10 estabelecimentos REAIS de "${nicho}" em "${local}". 
-        Critérios: 50-350 avaliações, Delivery, notas 3.7-4.4.${excludePrompt}
-        Retorne JSON ARRAY.`,
+        contents: `Localize 10 ${nicho} reais em ${local}. Retorne obrigatoriamente um JSON array seguindo este esquema exato.`,
         config: {
           tools: [{ googleSearch: {} }],
           responseMimeType: "application/json",
@@ -47,24 +39,26 @@ export const geminiService = {
         }
       });
 
-      console.log("API RESPONDEU COM SUCESSO.");
-      const text = response.text;
-      if (!text) {
-        console.error("ERRO: Resposta de texto vazia da IA.");
-        throw new Error("A IA não retornou nenhum texto.");
-      }
-      
-      const parsed = JSON.parse(text);
-      console.log(`DADOS EXTRAÍDOS: ${parsed.length} leads encontrados.`);
-      return parsed;
+      if (!response.text) throw new Error("A Inteligência retornou dados vazios.");
+      return JSON.parse(response.text);
     } catch (e: any) {
-      console.group("ERRO NA VARREDURA (DIAGNÓSTICO)");
-      console.error("Mensagem:", e.message);
-      console.error("Objeto Completo:", e);
-      if (e.message?.includes("API_KEY")) console.error("DICA: Verifique suas variáveis de ambiente na Vercel.");
-      if (e.message?.includes("googleSearch")) console.error("DICA: Sua API Key pode não ter acesso à ferramenta de busca.");
-      console.groupEnd();
+      if ((e.message?.includes("429") || e.status === 429) && retries < 1) {
+        console.warn("Quota temporária excedida. Aguardando 4s para retry...");
+        await delay(4000);
+        return this.scanLeads(nicho, local, retries + 1);
+      }
+      this.handleApiError(e);
       throw e;
+    }
+  },
+
+  handleApiError(e: any) {
+    if (e.message?.includes("429") || e.status === 429) {
+      e.friendlyMessage = "LIMITE DE QUOTA: A ferramenta de pesquisa do Google (Search) atingiu o limite de consultas gratuitas. Aguarde 1 minuto ou mude para o plano Pay-as-you-go.";
+    } else if (e.message?.includes("API_KEY")) {
+      e.friendlyMessage = "Falha de Autenticação: Verifique a configuração da sua API_KEY.";
+    } else {
+      e.friendlyMessage = "Erro no Motor de Busca: " + (e.message || "Erro desconhecido");
     }
   },
 
@@ -73,15 +67,15 @@ export const geminiService = {
       const ai = getAI();
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Análise profunda: "${leadName}" em "${localizacao}".`,
+        contents: `Realize uma análise SWOT técnica para o negócio "${leadName}" em "${localizacao}". Inclua dados sobre dono e CNPJ se encontrar na rede.`,
         config: {
           tools: [{ googleSearch: {} }],
           responseMimeType: "application/json"
         }
       });
       return JSON.parse(response.text || '{}');
-    } catch (e) {
-      console.error("Erro na análise profunda:", e);
+    } catch (e: any) {
+      this.handleApiError(e);
       throw e;
     }
   },
@@ -91,14 +85,12 @@ export const geminiService = {
       const ai = getAI();
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Pitch para: "${leadName}". Insight: "${insight}".`,
-        config: {
-          responseMimeType: "application/json"
-        }
+        contents: `Gere um script de abordagem persuasivo para WhatsApp. Empresa: "${leadName}". Insight: "${insight}". Foco: Venda de serviços de Marketing/Agência.`,
+        config: { responseMimeType: "application/json" }
       });
       return JSON.parse(response.text || '{}');
-    } catch (e) {
-      console.error("Erro ao gerar pitch:", e);
+    } catch (e: any) {
+      this.handleApiError(e);
       throw e;
     }
   }
