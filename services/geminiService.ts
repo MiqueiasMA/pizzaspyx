@@ -1,11 +1,7 @@
 import { GoogleGenAI, Type } from "@google/genai";
 
 const getAI = () => {
-  const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    console.error("ERRO CRÍTICO: Variável API_KEY não definida no ambiente.");
-  }
-  return new GoogleGenAI({ apiKey: apiKey || "" });
+  return new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
 };
 
 export const geminiService = {
@@ -13,19 +9,14 @@ export const geminiService = {
     try {
       const ai = getAI();
       const excludePrompt = existingNames.length > 0 
-        ? `\nIMPORTANTE: Ignore estes locais: ${existingNames.join(", ")}.`
+        ? `\nNão inclua estes locais: ${existingNames.join(", ")}.`
         : "";
 
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Aja como um especialista em inteligência de vendas. Encontre 10 estabelecimentos REAIS de "${nicho}" em "${local}". 
-        
-        CRITÉRIOS:
-        1. MATURIDADE: 50 a 350 avaliações no Google.
-        2. OPERAÇÃO: Foco em Delivery/Retirada.
-        3. GAPS: Notas entre 3.7 e 4.4, sem site oficial ou presença digital amadora.${excludePrompt}
-
-        Retorne EXATAMENTE um array JSON com 10 objetos.`,
+        contents: `Encontre 10 estabelecimentos REAIS de "${nicho}" em "${local}" usando Google Search. 
+        CRITÉRIOS: 50-350 avaliações, Delivery forte, notas 3.7-4.4.${excludePrompt}
+        Retorne APENAS o JSON conforme o esquema definido.`,
         config: {
           tools: [{ googleSearch: {} }],
           responseMimeType: "application/json",
@@ -48,9 +39,11 @@ export const geminiService = {
         }
       });
 
-      return JSON.parse(response.text || '[]');
+      const text = response.text;
+      if (!text) throw new Error("Resposta vazia da IA");
+      return JSON.parse(text);
     } catch (e) {
-      console.error("Erro na chamada Gemini (scanLeads):", e);
+      console.error("Erro no scanLeads:", e);
       throw e;
     }
   },
@@ -59,8 +52,8 @@ export const geminiService = {
     try {
       const ai = getAI();
       const response = await ai.models.generateContent({
-        model: "gemini-3-pro-preview",
-        contents: `Investigação profunda sobre "${leadName}" em "${localizacao}".`,
+        model: "gemini-3-flash-preview",
+        contents: `Faça uma análise SWOT profunda sobre "${leadName}" em "${localizacao}".`,
         config: {
           tools: [{ googleSearch: {} }],
           responseMimeType: "application/json",
@@ -83,7 +76,7 @@ export const geminiService = {
       });
       return JSON.parse(response.text || '{}');
     } catch (e) {
-      console.error("Erro na análise profunda:", e);
+      console.error("Erro na análise:", e);
       return {};
     }
   },
@@ -93,7 +86,7 @@ export const geminiService = {
       const ai = getAI();
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `Crie um pitch para "${leadName}". Insight: "${insight}".`,
+        contents: `Crie um pitch persuasivo para "${leadName}". Foco no insight: "${insight}".`,
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -107,8 +100,8 @@ export const geminiService = {
       });
       return JSON.parse(response.text || '{}');
     } catch (e) {
-      console.error("Erro ao gerar pitch:", e);
-      return { mensagem: "Não foi possível gerar a proposta automática." };
+      console.error("Erro no pitch:", e);
+      return { mensagem: "Erro ao gerar proposta." };
     }
   }
 };
