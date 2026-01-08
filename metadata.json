@@ -1,0 +1,7 @@
+{
+  "name": "PizzaSpy X - Intelligence Suite",
+  "description": "Advanced AI-powered lead generation and sales intelligence platform for agency owners and sales professionals targeting the food industry.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
