@@ -1,17 +1,20 @@
-
 import { GoogleGenAI, Type } from "@google/genai";
 
-// Inicializa o SDK Google GenAI usando a chave de API das variáveis de ambiente
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Função auxiliar para inicializar o AI apenas quando necessário
+const getAI = () => {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) {
+    console.warn("API_KEY não encontrada. Verifique as variáveis de ambiente.");
+  }
+  return new GoogleGenAI({ apiKey: apiKey || "" });
+};
 
 export const geminiService = {
   /**
    * Realiza a varredura de leads focada no "Sweet Spot".
-   * @param nicho O tipo de negócio
-   * @param local A localização
-   * @param existingNames Nomes de estabelecimentos já encontrados para evitar duplicatas
    */
   async scanLeads(nicho: string, local: string, existingNames: string[] = []) {
+    const ai = getAI();
     const excludePrompt = existingNames.length > 0 
       ? `\nIMPORTANTE: Não retorne nenhum destes estabelecimentos que já encontrei: ${existingNames.join(", ")}. Busque novos alvos.`
       : "";
@@ -57,6 +60,7 @@ export const geminiService = {
   },
 
   async generateAnalysis(leadName: string, localizacao: string) {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
       contents: `Realize uma investigação profunda sobre o estabelecimento "${leadName}" em "${localizacao}".
@@ -87,10 +91,16 @@ export const geminiService = {
       }
     });
 
-    return JSON.parse(response.text || '{}');
+    try {
+      return JSON.parse(response.text || '{}');
+    } catch (e) {
+      console.error("Erro na análise:", e);
+      return {};
+    }
   },
 
   async generatePitch(leadName: string, insight: string) {
+    const ai = getAI();
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: `Crie um pitch de alta conversão para o WhatsApp do dono da "${leadName}". Insight: "${insight}". Seja direto, humano e foque em ROI.`,
@@ -106,6 +116,11 @@ export const geminiService = {
       }
     });
 
-    return JSON.parse(response.text || '{}');
+    try {
+      return JSON.parse(response.text || '{}');
+    } catch (e) {
+      console.error("Erro no pitch:", e);
+      return { mensagem: "Erro ao gerar proposta automática." };
+    }
   }
 };
